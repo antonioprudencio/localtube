@@ -448,6 +448,18 @@ abstract class AppLocalizations {
   /// **'Pasta adicionada: {name}'**
   String folderAdded(String name);
 
+  /// No description provided for @folderAddedCount.
+  ///
+  /// In pt, this message translates to:
+  /// **'Pasta \"{name}\" adicionada: {count, plural, =1{1 vídeo encontrado} other{{count} vídeos encontrados}}'**
+  String folderAddedCount(String name, int count);
+
+  /// No description provided for @folderAddedEmpty.
+  ///
+  /// In pt, this message translates to:
+  /// **'Nenhum vídeo encontrado em \"{name}\". Verifique se a pasta contém vídeos e se o LocalTube tem permissão de acesso.'**
+  String folderAddedEmpty(String name);
+
   /// No description provided for @scanning.
   ///
   /// In pt, this message translates to:

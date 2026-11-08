@@ -29,6 +29,21 @@ abstract final class AndroidSystem {
     });
   }
 
+  static int? _sdkInt;
+
+  /// Versão da API do Android (ex.: 33 = Android 13). 0 fora do Android.
+  static Future<int> sdkInt() async {
+    if (!Platform.isAndroid) return 0;
+    if (_sdkInt != null) return _sdkInt!;
+    try {
+      _sdkInt = await _channel.invokeMethod<int>('sdkInt') ?? 0;
+    } on PlatformException catch (e) {
+      debugPrint('[AndroidSystem] sdkInt: $e');
+      _sdkInt = 0;
+    }
+    return _sdkInt!;
+  }
+
   /// Habilita/desabilita a entrada automática em PiP ao sair do app
   /// (quando há vídeo tocando).
   static Future<void> setAutoPip(bool enabled) async {

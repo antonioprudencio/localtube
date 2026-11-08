@@ -193,6 +193,22 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String folderAddedCount(String name, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count vídeos encontrados',
+      one: '1 vídeo encontrado',
+    );
+    return 'Pasta \"$name\" adicionada: $_temp0';
+  }
+
+  @override
+  String folderAddedEmpty(String name) {
+    return 'Nenhum vídeo encontrado em \"$name\". Verifique se a pasta contém vídeos e se o LocalTube tem permissão de acesso.';
+  }
+
+  @override
   String get scanning => 'Escaneando pastas…';
 
   @override

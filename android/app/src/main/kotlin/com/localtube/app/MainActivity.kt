@@ -33,6 +33,7 @@ class MainActivity : FlutterActivity() {
                         updateAspect(w, h)
                         result.success(enterPip())
                     }
+                    "sdkInt" -> result.success(Build.VERSION.SDK_INT)
                     "setAutoPip" -> {
                         autoPip = call.arguments as? Boolean ?: false
                         applyAutoEnter()

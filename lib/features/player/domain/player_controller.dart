@@ -11,6 +11,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../core/models/video_item.dart';
 import '../../../core/platform/android_system.dart';
 import '../../../core/platform/windows_window.dart';
+import '../../folders/domain/library_indexer.dart';
 import '../../library/data/video_repository.dart';
 import '../../settings/presentation/settings_providers.dart';
 import '../data/playback_repository.dart';
@@ -60,6 +61,7 @@ class PlayerController extends _$PlayerController {
         if (done) _onCompleted();
       }))
       ..add(player.stream.error.listen(_onError))
+      ..add(player.stream.duration.listen(_onDuration))
       ..add(player.stream.playing.listen(_onPlayingChanged));
     if (kDebugMode) {
       _subs.add(player.stream.log.listen((l) => debugPrint('[mpv] $l')));
@@ -67,6 +69,7 @@ class PlayerController extends _$PlayerController {
 
     ref.onDispose(() {
       _saveTimer?.cancel();
+      _errorCheck?.cancel();
       for (final s in _subs) {
         s.cancel();
       }
@@ -244,11 +247,29 @@ class PlayerController extends _$PlayerController {
     }
   }
 
+  Timer? _errorCheck;
+
+  /// Erros do mpv nem sempre são fatais: ao abrir um vídeo, ele tenta o
+  /// decodificador de hardware e, se falhar ("Could not open codec"), cai
+  /// sozinho para o de software. Por isso só consideramos o arquivo
+  /// ilegível se, alguns segundos depois do erro, ele ainda não carregou.
   void _onError(String message) {
     debugPrint('[PlayerController] erro do mpv: $message');
-    // Erros durante a abertura indicam formato não suportado/arquivo corrompido.
-    if (player.state.duration == Duration.zero && state.hasVideo) {
-      state = state.copyWith(error: () => PlayerErrorKind.unplayable);
+    final item = state.current;
+    if (item == null || player.state.duration > Duration.zero) return;
+    _errorCheck?.cancel();
+    _errorCheck = Timer(const Duration(seconds: 4), () {
+      if (!ref.mounted || state.current?.id != item.id) return;
+      if (player.state.duration == Duration.zero) {
+        state = state.copyWith(error: () => PlayerErrorKind.unplayable);
+      }
+    });
+  }
+
+  /// Arquivo carregou: descarta qualquer erro transitório anterior.
+  void _onDuration(Duration d) {
+    if (d > Duration.zero && state.error == PlayerErrorKind.unplayable) {
+      state = state.copyWith(error: () => null);
     }
   }
 
@@ -262,6 +283,8 @@ class PlayerController extends _$PlayerController {
       WakelockPlus.disable().catchError((_) {});
     }
     AndroidSystem.setAutoPip(playing);
+    // Libera a CPU para a reprodução: a fila de miniaturas espera.
+    ref.read(libraryIndexerProvider.notifier).setPlaybackActive(playing);
   }
 
   Future<void> _saveProgress() async {

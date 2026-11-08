@@ -4,20 +4,29 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../utils/context_ext.dart';
+import 'android_system.dart';
 
 /// Permissões de leitura de vídeos no Android:
 /// `READ_MEDIA_VIDEO` (API 33+) ou `READ_EXTERNAL_STORAGE` (API ≤ 32).
+///
+/// A permissão certa é escolhida pela versão do sistema. Não basta aceitar
+/// "qualquer uma": no Android 13+ o status de `storage` não reflete o acesso
+/// a vídeos, e sem `READ_MEDIA_VIDEO` o sistema esconde os arquivos ao
+/// listar a pasta (o scan encontraria zero vídeos).
 abstract final class AndroidPermissions {
+  static Future<Permission> _videoPermission() async =>
+      await AndroidSystem.sdkInt() >= 33 ? Permission.videos : Permission.storage;
+
   static Future<bool> hasVideoAccess() async {
     if (!Platform.isAndroid) return true;
-    return await Permission.videos.isGranted ||
-        await Permission.storage.isGranted;
+    return (await _videoPermission()).isGranted;
   }
 
   /// Explica o motivo antes de pedir a permissão. Retorna `true` se concedida.
   static Future<bool> ensureVideoAccess(BuildContext context) async {
     if (!Platform.isAndroid) return true;
-    if (await hasVideoAccess()) return true;
+    final permission = await _videoPermission();
+    if (await permission.isGranted) return true;
     if (!context.mounted) return false;
 
     final proceed = await showDialog<bool>(
@@ -40,23 +49,20 @@ abstract final class AndroidPermissions {
     );
     if (proceed != true) return false;
 
-    // Em API 33+ só READ_MEDIA_VIDEO tem efeito; em ≤ 32 só storage.
-    // Pedir as duas e aceitar qualquer uma cobre as duas faixas.
-    final statuses = await [Permission.videos, Permission.storage].request();
-    final granted = statuses.values.any((s) => s.isGranted || s.isLimited);
-    if (granted) return true;
+    final status = await permission.request();
+    if (status.isGranted) return true;
 
-    final permanentlyDenied = statuses.values.any((s) => s.isPermanentlyDenied);
+    // Negada antes (ou "acesso limitado" a vídeos selecionados no
+    // Android 14+): só dá para liberar nas configurações do sistema.
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
+          duration: const Duration(seconds: 8),
           content: Text(context.l10n.permissionDenied),
-          action: permanentlyDenied
-              ? SnackBarAction(
-                  label: context.l10n.openSystemSettings,
-                  onPressed: openAppSettings,
-                )
-              : null,
+          action: SnackBarAction(
+            label: context.l10n.openSystemSettings,
+            onPressed: openAppSettings,
+          ),
         ),
       );
     }

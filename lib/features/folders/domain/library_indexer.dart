@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/db/database.dart';
+import '../../../core/platform/android_permissions.dart';
 import '../../library/data/video_repository.dart';
 import '../../settings/presentation/settings_providers.dart';
 import '../data/file_scanner.dart';
@@ -68,7 +69,19 @@ class IndexerState {
 /// Coordena scan das pastas, sincronização com o banco e fila de metadados.
 @Riverpod(keepAlive: true)
 class LibraryIndexer extends _$LibraryIndexer {
-  static const _concurrency = 2;
+  /// No Android a decodificação (ex.: AV1 por software) é pesada: 1 extrator.
+  static int get _concurrency => Platform.isAndroid ? 1 : 2;
+
+  /// Enquanto um vídeo toca, a fila de extração fica em pausa.
+  bool _playbackActive = false;
+
+  void setPlaybackActive(bool active) => _playbackActive = active;
+
+  Future<void> _waitWhilePlaying() async {
+    while (_playbackActive && ref.mounted) {
+      await Future<void>.delayed(const Duration(seconds: 1));
+    }
+  }
 
   final _probers = <VideoProber>[];
   final _inFlight = <int>{};
@@ -99,6 +112,12 @@ class LibraryIndexer extends _$LibraryIndexer {
 
   /// Chamado na abertura do app: detecta mudanças e liga a vigilância.
   Future<void> startup() async {
+    // Sem permissão, o Android esconde os vídeos ao listar as pastas: um scan
+    // agora marcaria toda a biblioteca como indisponível.
+    if (!await AndroidPermissions.hasVideoAccess()) {
+      debugPrint('[LibraryIndexer] sem permissão de vídeos; scan adiado');
+      return;
+    }
     await rescanAll();
     if (Platform.isWindows) {
       for (final f in await _folders.getFolders()) {
@@ -196,6 +215,8 @@ class LibraryIndexer extends _$LibraryIndexer {
         for (final prober in List.of(_probers))
           () async {
             while (queue.isNotEmpty && ref.mounted) {
+              await _waitWhilePlaying();
+              if (queue.isEmpty || !ref.mounted) return;
               final v = queue.removeAt(0);
               _inFlight.add(v.id);
               try {

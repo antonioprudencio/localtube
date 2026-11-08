@@ -54,7 +54,13 @@ class MediaProbe {
       // Não carregar legendas nem áudio durante a extração.
       await native.setProperty('sid', 'no');
       await native.setProperty('aid', 'no');
-      await native.setProperty('hr-seek', 'yes');
+      // Busca no keyframe mais próximo (sem decodificar até o ponto exato):
+      // muito mais barato em vídeos 4K/AV1 decodificados por software.
+      await native.setProperty('hr-seek', 'no');
+      // Atalhos de decodificação: a miniatura não precisa de qualidade máxima.
+      await native.setProperty('vd-lavc-skiploopfilter', 'all');
+      await native.setProperty('vd-lavc-fast', 'yes');
+      await native.setProperty('cache', 'no');
     }
   }
 
@@ -120,7 +126,7 @@ class MediaProbe {
       await player.seek(target);
       // Espera o frame do ponto de busca ser decodificado.
       await player.stream.position
-          .firstWhere((pos) => (pos - target).inMilliseconds.abs() < 1500)
+          .firstWhere((pos) => (pos - target).inSeconds.abs() < 15)
           .timeout(const Duration(seconds: 3), onTimeout: () => target);
       await Future<void>.delayed(const Duration(milliseconds: 250));
 
