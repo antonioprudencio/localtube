@@ -1,0 +1,17 @@
+targets:
+  $default:
+    builders:
+      # O drift gera `database.drift.dart` diretamente (não como "shared part"),
+      # para que o gerador do Riverpod consiga resolver os tipos gerados
+      # (FolderRow, VideoRow…) usados nos providers.
+      drift_dev:
+        enabled: false
+      drift_dev:not_shared:
+        enabled: true
+        generate_for:
+          - lib/core/db/database.dart
+
+global_options:
+  drift_dev:not_shared:
+    runs_before:
+      - riverpod_generator:riverpod_generator
